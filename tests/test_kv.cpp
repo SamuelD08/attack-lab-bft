@@ -2,7 +2,7 @@
 
 #include "kv/kv_store.h"
 
-TEST(KVStore, PutAndGetSimpleValue)
+TEST(KVStoreExecute, PutAndGetSimpleValue)
 {
     KVStore kv;
     Request r1;
@@ -19,7 +19,7 @@ TEST(KVStore, PutAndGetSimpleValue)
     EXPECT_EQ("1", res1.value);
 }
 
-TEST(KVStore, PutValueWithoutKey)
+TEST(KVStoreExecute, PutValueWithoutKey)
 {
     KVStore kv;
     Request r1;
@@ -30,7 +30,7 @@ TEST(KVStore, PutValueWithoutKey)
     EXPECT_EQ(res.found, Status::InvalidKey);
 }
 
-TEST(KVStore, PutValueAndGetAnother)
+TEST(KVStoreExecute, PutValueAndGetAnother)
 {
     KVStore kv;
     Request r1;
@@ -49,7 +49,7 @@ TEST(KVStore, PutValueAndGetAnother)
     EXPECT_EQ(res2.found, Status::NotFound);
 }
 
-TEST(KVStore, Put2DifferentValueWithSameKey)
+TEST(KVStoreExecute, Put2DifferentValueWithSameKey)
 {
     KVStore kv;
     Request r1;
@@ -74,5 +74,87 @@ TEST(KVStore, Put2DifferentValueWithSameKey)
 
     Result res3 = kv.execute(r3);
     EXPECT_EQ(res3.value, "2");
+}
+
+TEST(KVStoreDigest, SameValuesSameOrder)
+{
+    KVStore kv1;
+    KVStore kv2;
+
+    Request r1{.op = Operation::Put, .key = "a", .value = "1"};
+    Request r2{.op = Operation::Put, .key = "b", .value = "22"};
+
+    kv1.execute(r1);
+    kv2.execute(r1);
+    kv1.execute(r2);
+    kv2.execute(r2);
+
+    EXPECT_EQ(kv1.digest(), kv2.digest());
+}
+
+TEST(KVStoreDigest, SameValuesDifferentOrder)
+{
+    KVStore kv1;
+    KVStore kv2;
+
+    Request r1{.op = Operation::Put, .key = "a", .value = "1"};
+    Request r2{.op = Operation::Put, .key = "b", .value = "22"};
+
+    kv1.execute(r1);
+    kv1.execute(r2);
+    kv2.execute(r2);
+    kv2.execute(r1);
+
+    EXPECT_EQ(kv1.digest(), kv2.digest());
+}
+
+TEST(KVStoreDigest, SameKeyDifferentValue)
+{
+    KVStore kv1;
+    KVStore kv2;
+
+    Request r1{.op = Operation::Put, .key = "a", .value = "1"};
+    Request r2{.op = Operation::Put, .key = "a", .value = "2"};
+
+    kv1.execute(r1);
+    kv2.execute(r2);
+
+    EXPECT_NE(kv1.digest(), kv2.digest());
+}
+
+TEST(KVStoreDigest, LengthIsImportant)
+{
+    KVStore kv1;
+    KVStore kv2;
+
+    Request r1{.op = Operation::Put, .key = "a", .value = "bc"};
+    Request r2{.op = Operation::Put, .key = "ab", .value = "c"};
+
+    kv1.execute(r1);
+    kv2.execute(r2);
+
+    EXPECT_NE(kv1.digest(), kv2.digest());
+}
+
+TEST(KVStoreDigest, TwoDifferentObjects)
+{
+    KVStore kv1;
+    KVStore kv2;
+
+    Request r1{.op = Operation::Put, .key = "a", .value = "1"};
+    Request r2{.op = Operation::Put, .key = "b", .value = "c"};
+
+    kv1.execute(r1);
+    kv2.execute(r2);
+
+    EXPECT_NE(kv1.digest(), kv2.digest());
+}
+
+TEST(KVStoreDigest, EmptyStore)
+{
+    KVStore kv1;
+    KVStore kv2;
+
+    EXPECT_EQ(kv1.digest(), kv2.digest());
 }
 

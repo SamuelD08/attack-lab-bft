@@ -39,5 +39,19 @@ Result KVStore::execute(const Request& req)
 
 Digest KVStore::digest() const
 {
-    return {};
+    Digest d;
+    crypto_hash_sha256_state state;
+    crypto_hash_sha256_init(&state);
+    for (const auto& [key, value] : data)
+    {
+        // For each (key, value) in key order: len(key) as 8 bytes | key | len(value) as 8 bytes | value
+        const std::uint64_t kLength = key.length();
+        const std::uint64_t vLength = value.length();
+        crypto_hash_sha256_update(&state, reinterpret_cast<const unsigned char*>(&kLength), sizeof(kLength));
+        crypto_hash_sha256_update(&state, reinterpret_cast<const unsigned char*>(key.data()), kLength);
+        crypto_hash_sha256_update(&state, reinterpret_cast<const unsigned char*>(&vLength), sizeof(vLength));
+        crypto_hash_sha256_update(&state, reinterpret_cast<const unsigned char*>(value.data()), vLength);
+    }
+    crypto_hash_sha256_final(&state, d.data());
+    return d;
 }
