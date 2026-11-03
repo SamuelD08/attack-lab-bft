@@ -22,3 +22,8 @@ add_executable(unit_tests tests/test_setup.cpp)
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM)
 include(GoogleTest)
 gtest_discover_tests(unit_tests)
+
+# TOOLS
+add_executable(tools tools/hello_sign.cpp)
+target_link_libraries(tools PRIVATE PkgConfig::SODIUM)
+
