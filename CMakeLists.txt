@@ -3,10 +3,15 @@ project(attack_lab_bft)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(attack_lab_bft main.cpp
+add_executable(attack_lab_bft
+        src/main.cpp
 )
 
 add_compile_options(-Wall -Wextra -Wpedantic)
+
+# Libraries
+add_library(attacklab src/kv/kv_store.cpp)
+target_include_directories(attacklab PUBLIC src)
 
 # LIBSODIUM
 find_package(PkgConfig REQUIRED)
@@ -18,8 +23,11 @@ FetchContent_Declare(GTest GIT_REPOSITORY https://github.com/google/googletest.g
 FetchContent_MakeAvailable(GTest)
 
 enable_testing()
-add_executable(unit_tests tests/test_setup.cpp)
-target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM)
+add_executable(unit_tests
+        tests/test_setup.cpp
+        tests/test_kv.cpp
+)
+target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM attacklab)
 include(GoogleTest)
 gtest_discover_tests(unit_tests)
 
