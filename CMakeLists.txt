@@ -13,6 +13,9 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 add_library(attacklab src/kv/kv_store.cpp
         src/protocol/message.cpp
         src/protocol/message.h
+        src/crypto/signer.h
+        src/crypto/fakeSigner.cpp
+        src/crypto/fakeSigner.h
 )
 target_include_directories(attacklab PUBLIC src)
 
@@ -30,6 +33,7 @@ add_executable(unit_tests
         tests/test_setup.cpp
         tests/test_kv.cpp
         tests/test_message.cpp
+        tests/test_fake_signer.cpp
 )
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM attacklab)
 include(GoogleTest)
