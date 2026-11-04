@@ -4,6 +4,8 @@
 
 #include "protocol/message.h"
 
+#include <cstring>
+
 //Helpers
 namespace
 {
@@ -30,6 +32,66 @@ namespace
             out.insert(out.end(), &element, &element + sizeof(element));
         }
     }
+
+    struct Reader
+    {
+        const std::vector<unsigned char>& bytes;
+        std::size_t pos = 0;
+
+        [[nodiscard]] std::size_t remaining() const
+        {
+            return bytes.size()-pos;
+        }
+
+        bool read64U(std::uint64_t& out)
+        {
+            if (remaining() < sizeof(out)) return false;
+            std::memcpy(&out, bytes.data() + pos, sizeof(out));
+            pos += sizeof(out);
+            return true;
+        }
+
+        bool read32U(std::uint32_t& out)
+        {
+            if (remaining() < sizeof(out)) return false;
+            std::memcpy(&out, bytes.data() + pos, sizeof(out));
+            pos += sizeof(out);
+            return true;
+        }
+
+        bool read8U(std::uint8_t& out)
+        {
+            if (remaining() < sizeof(out)) return false;
+            std::memcpy(&out, bytes.data() + pos, sizeof(out));
+            pos += sizeof(out);
+            return true;
+        }
+
+
+        bool readBytes(std::string& out)
+        {
+            std::uint64_t size;
+            if (remaining() < sizeof(std::uint64_t)) return false;
+            std::memcpy(&size, bytes.data() + pos, sizeof(std::uint64_t));
+            pos += sizeof(std::uint64_t);
+
+            if (remaining() < size) return false;
+            out.assign(reinterpret_cast<const char*>(bytes.data() + pos), size);
+            pos += size;
+
+            return true;
+        }
+
+        template<std::size_t N>
+        bool readFixed(std::array<unsigned char, N>& out)
+        {
+            if (remaining() < N) return false;
+            std::memcpy(out.data(), bytes.data() + pos, N);
+            pos += N;
+            return true;
+        }
+
+    };
 }
 
 /*
@@ -51,7 +113,7 @@ std::vector<unsigned char> bytesToSign(const Message& message)
     appendBytes(message_serialized, message.payload.key);
     appendBytes(message_serialized, message.payload.value);
     // Result
-    appendU8(message_serialized, static_cast<std::uint8_t>(message.result.found));
+    appendU8(message_serialized, static_cast<std::uint8_t>(message.result.status));
     appendBytes(message_serialized, message.result.value);
     return message_serialized;
 }
@@ -64,4 +126,38 @@ std::vector<unsigned char> serialize(const Message& message)
     std::vector<unsigned char> message_serialized = bytesToSign(message);
     message_serialized.insert(message_serialized.end(), message.signature.begin(), message.signature.end());
     return message_serialized;
+}
+
+std::optional<Message> parse(const std::vector<unsigned char>& bytes)
+{
+    Reader r(bytes);
+    Message m;
+
+    std::uint8_t type = 0;
+    if (!r.read32U(m.sender) || !r.read32U(m.receiver) || !r.read8U(type)) return std::nullopt;
+    if (type > static_cast<std::uint8_t>(MessageType::REPLY)) return std::nullopt;
+    m.type = static_cast<MessageType>(type);
+
+    if (!r.read64U(m.view) || !r.read64U(m.seq)) return std::nullopt;
+    if (!r.readFixed(m.digest)) return std::nullopt;
+
+    // Request
+    std::uint8_t op = 0;
+    if (!r.read32U(m.payload.clientId) || !r.read64U(m.payload.requestId) || !r.read8U(op)) return std::nullopt;
+    if (op > static_cast<std::uint8_t>(Operation::Get)) return std::nullopt;
+    m.payload.op = static_cast<Operation>(op);
+    if (!r.readBytes(m.payload.key) || !r.readBytes(m.payload.value)) return std::nullopt;
+
+    // Result
+    std::uint8_t status = 0;
+    if (!r.read8U(status)) return std::nullopt;
+    if (status > static_cast<std::uint8_t>(Status::NotExecutedYet)) return std::nullopt;
+    m.result.status = static_cast<Status>(status);
+    if (!r.readBytes(m.result.value)) return std::nullopt;
+
+    if (!r.readFixed(m.signature)) return std::nullopt;
+
+    if (r.remaining() != 0) return std::nullopt;
+    return m;
+
 }

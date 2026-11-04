@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <sodium.h>
 #include <vector>
+#include <optional>
 
 #include "kv/kv_store.h"
 
@@ -37,6 +38,7 @@ struct Message
 
 std::vector<unsigned char> bytesToSign(const Message& message);
 std::vector<unsigned char> serialize(const Message& message);
+std::optional<Message> parse(const std::vector<unsigned char>& bytes);
 
 
 
