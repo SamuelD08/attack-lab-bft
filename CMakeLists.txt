@@ -29,6 +29,7 @@ enable_testing()
 add_executable(unit_tests
         tests/test_setup.cpp
         tests/test_kv.cpp
+        tests/test_message.cpp
 )
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM attacklab)
 include(GoogleTest)
