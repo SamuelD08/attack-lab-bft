@@ -21,7 +21,7 @@ enum class Status
     Ok,
     NotFound,
     InvalidKey,
-    NotExecutedYet
+    NotExecutedYet // keep NotExecutedYet last: parse() relies on it
 };
 
 struct Request
@@ -37,7 +37,7 @@ struct Request
 
 struct Result
 {
-    Status found = Status::NotExecutedYet;
+    Status status = Status::NotExecutedYet;
     std::string value;
 
     bool operator==(const Result&) const = default;

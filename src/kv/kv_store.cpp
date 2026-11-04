@@ -10,14 +10,14 @@ Result KVStore::execute(const Request& req)
     Result res;
     if (req.key.empty())
     {
-        res.found = Status::InvalidKey;
+        res.status = Status::InvalidKey;
         return res;
     }
     switch (req.op)
     {
     case Operation::Put:
         data[req.key] = req.value;
-        res.found = Status::Ok;
+        res.status = Status::Ok;
         res.value = req.value;
         break;
     case Operation::Get:
@@ -26,10 +26,10 @@ Result KVStore::execute(const Request& req)
         if (it != data.end())
         {
             res.value = it->second;
-            res.found = Status::Ok;
+            res.status = Status::Ok;
         } else
         {
-            res.found = Status::NotFound;
+            res.status = Status::NotFound;
         }
         break;
     }

@@ -15,7 +15,7 @@ TEST(KVStoreExecute, PutAndGetSimpleValue)
 
     kv.execute(r1);
     Result res1 = kv.execute(r2);
-    EXPECT_EQ(res1.found, Status::Ok);
+    EXPECT_EQ(res1.status, Status::Ok);
     EXPECT_EQ("1", res1.value);
 }
 
@@ -27,7 +27,7 @@ TEST(KVStoreExecute, PutValueWithoutKey)
     r1.value = "1";
 
     Result res = kv.execute(r1);
-    EXPECT_EQ(res.found, Status::InvalidKey);
+    EXPECT_EQ(res.status, Status::InvalidKey);
 }
 
 TEST(KVStoreExecute, PutValueAndGetAnother)
@@ -43,10 +43,10 @@ TEST(KVStoreExecute, PutValueAndGetAnother)
     r2.key = "b";
 
     Result res = kv.execute(r1);
-    EXPECT_EQ(res.found, Status::Ok);
+    EXPECT_EQ(res.status, Status::Ok);
 
     Result res2 = kv.execute(r2);
-    EXPECT_EQ(res2.found, Status::NotFound);
+    EXPECT_EQ(res2.status, Status::NotFound);
 }
 
 TEST(KVStoreExecute, Put2DifferentValueWithSameKey)
@@ -67,10 +67,10 @@ TEST(KVStoreExecute, Put2DifferentValueWithSameKey)
     r3.key = "a";
 
     Result res = kv.execute(r1);
-    EXPECT_EQ(res.found, Status::Ok);
+    EXPECT_EQ(res.status, Status::Ok);
 
     Result res2 = kv.execute(r2);
-    EXPECT_EQ(res2.found, Status::Ok);
+    EXPECT_EQ(res2.status, Status::Ok);
 
     Result res3 = kv.execute(r3);
     EXPECT_EQ(res3.value, "2");
