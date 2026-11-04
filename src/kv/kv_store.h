@@ -31,12 +31,16 @@ struct Request
     Operation op = Operation::Get;
     std::string key;
     std::string value;
+
+    bool operator==(const Request&) const = default;
 };
 
 struct Result
 {
     Status found = Status::NotExecutedYet;
     std::string value;
+
+    bool operator==(const Result&) const = default;
 };
 
 using Digest = std::array<unsigned char, crypto_hash_sha256_BYTES>;

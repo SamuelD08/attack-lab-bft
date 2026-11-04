@@ -10,7 +10,10 @@ add_executable(attack_lab_bft
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # Libraries
-add_library(attacklab src/kv/kv_store.cpp)
+add_library(attacklab src/kv/kv_store.cpp
+        src/protocol/message.cpp
+        src/protocol/message.h
+)
 target_include_directories(attacklab PUBLIC src)
 
 # LIBSODIUM
