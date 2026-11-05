@@ -9,8 +9,10 @@
 #include <random>
 #include <tuple>
 #include <vector>
+#include <map>
 
 #include "node.h"
+#include "deliveryPolicy.h"
 #include "transport.h"
 
 enum class EventKind
@@ -53,6 +55,8 @@ private:
 
     std::uint64_t nextOrder = 0;
 
+    DeliveryPolicy* networkPolicy = nullptr;
+
 
 public:
     Simulator(std::uint64_t seed, std::uint64_t baseDelay, std::uint64_t maxExtraDelay);
@@ -63,6 +67,8 @@ public:
 
     void addNode(std::uint32_t id, Node& node);
     void run(std::uint64_t timeLimit);
+
+    void setNetworkPolicy(DeliveryPolicy& policy);
 };
 
 #endif //ATTACK_LAB_BFT_SIMULATOR_H
