@@ -17,6 +17,9 @@ add_library(attacklab src/kv/kv_store.cpp
         src/crypto/fakeSigner.cpp
         src/crypto/fakeSigner.h
         src/sim/simulator.cpp
+        src/sim/deliveryPolicy.h
+        src/sim/simPolicy.cpp
+        src/sim/simPolicy.h
 )
 target_include_directories(attacklab PUBLIC src)
 
@@ -36,6 +39,8 @@ add_executable(unit_tests
         tests/test_message.cpp
         tests/test_fake_signer.cpp
         tests/test_simulator.cpp
+        tests/test_delivery_policy.cpp
+        tests/test_node.h
 )
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM attacklab)
 include(GoogleTest)
