@@ -20,6 +20,8 @@ add_library(attacklab src/kv/kv_store.cpp
         src/sim/deliveryPolicy.h
         src/sim/simPolicy.cpp
         src/sim/simPolicy.h
+        src/sim/counter.cpp
+        src/sim/counter.h
 )
 target_include_directories(attacklab PUBLIC src)
 
@@ -41,6 +43,7 @@ add_executable(unit_tests
         tests/test_simulator.cpp
         tests/test_delivery_policy.cpp
         tests/test_node.h
+        tests/test_counter.cpp
 )
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM attacklab)
 include(GoogleTest)
