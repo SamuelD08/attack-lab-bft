@@ -43,13 +43,21 @@ void Simulator::send(const Message& m)
         networkDecision = networkPolicy->decide(m, now());
     }
 
+    // Increment Counter -> POV: Sender
+    counterManager.incrementCountersSender(event.message.type, serialize(event.message).size());
+
+
     // Push the event into the queue
     for (auto addedDelay : networkDecision)
     {
         event.order = nextOrder++;
         event.time = clock + baseDelay + extra + addedDelay;
         queue.push(event);
+        // Increment Counter -> POV: Network
+        counterManager.incrementExtraCopies();
     }
+    // Increment Counter -> POV: Network
+    if (networkDecision.empty()) counterManager.incrementDropMessage();
 }
 
 std::uint64_t Simulator::now() const
@@ -77,6 +85,8 @@ void Simulator::run(std::uint64_t timeLimit)
         if (event.kind == EventKind::Delivery)
         {
             node->second->onMessage(event.message);
+            // Increment Counter -> POV: Network
+            counterManager.incrementDeliveredMessage();
         } else
         {
             node->second->onTimer(event.timerId);
@@ -87,6 +97,11 @@ void Simulator::run(std::uint64_t timeLimit)
 void Simulator::setNetworkPolicy(DeliveryPolicy& policy)
 {
     networkPolicy = &policy;
+}
+
+Counters Simulator::getCounters() const
+{
+    return counterManager.getCounters();
 }
 
 

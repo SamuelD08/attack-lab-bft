@@ -11,6 +11,7 @@
 #include <vector>
 #include <map>
 
+#include "counter.h"
 #include "node.h"
 #include "deliveryPolicy.h"
 #include "transport.h"
@@ -56,6 +57,7 @@ private:
     std::uint64_t nextOrder = 0;
 
     DeliveryPolicy* networkPolicy = nullptr;
+    CounterManager counterManager;
 
 
 public:
@@ -69,6 +71,8 @@ public:
     void run(std::uint64_t timeLimit);
 
     void setNetworkPolicy(DeliveryPolicy& policy);
+
+    [[nodiscard]] Counters getCounters() const;
 };
 
 #endif //ATTACK_LAB_BFT_SIMULATOR_H
