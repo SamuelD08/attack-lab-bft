@@ -150,8 +150,6 @@ TEST(Trace, MessageToUnknownNodeIsUndeliverable)
     sim.send(makeMessage(0, 9, 1)); // no node has id 9
     sim.run(kForever);
 
-    sim.printTrace(std::cout);
-
     EXPECT_EQ(kindsOf(sim.getTrace()), (std::vector<TraceKind>{TraceKind::Sent, TraceKind::Undeliverable}));
 }
 

@@ -56,13 +56,15 @@ void Simulator::send(const Message& m)
     event.messageId = messageId;
 
     // Push the event into the queue
-    for (auto addedDelay : networkDecision)
+    for (std::size_t copy = 0; copy < networkDecision.size(); copy++)
     {
+        if (copy > 0)
+        {
+            counterManager.incrementExtraCopies();
+        }
         event.order = nextOrder++;
-        event.time = clock + baseDelay + extra + addedDelay;
+        event.time = clock + baseDelay + extra + networkDecision[copy];
         queue.push(event);
-        // Increment Counter -> POV: Network
-        counterManager.incrementExtraCopies();
     }
 }
 
