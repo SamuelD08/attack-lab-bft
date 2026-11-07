@@ -29,23 +29,31 @@ void Simulator::send(const Message& m)
     std::uniform_int_distribution<std::uint64_t> distrib(0, maxExtraDelay);
     const std::uint64_t extra = distrib(randomGenerator);
 
+    // Increment Counter -> POV: Sender
+    const std::uint64_t messageId = nextMessageId++;
+    counterManager.incrementCountersSender(m.type, serialize(m).size());
+    tracer.recordSent(clock, messageId, m);
+
+    // Network change part
+    std::vector<std::uint64_t> networkDecision = {0};
+    if (networkPolicy != nullptr)
+    {
+        networkDecision = networkPolicy->decide(m, now());
+    }
+    // Increment Counter -> POV: Network
+    if (networkDecision.empty())
+    {
+        counterManager.incrementDropMessage();
+        tracer.recordDropped(clock, messageId, m);
+        return;
+    }
+
     // Make an Event
     Event event;
     event.target = m.receiver;
     event.kind = EventKind::Delivery;
     event.message = m;
-
-    std::vector<std::uint64_t> networkDecision = {0};
-
-    // Network change part
-    if (networkPolicy != nullptr)
-    {
-        networkDecision = networkPolicy->decide(m, now());
-    }
-
-    // Increment Counter -> POV: Sender
-    counterManager.incrementCountersSender(event.message.type, serialize(event.message).size());
-
+    event.messageId = messageId;
 
     // Push the event into the queue
     for (auto addedDelay : networkDecision)
@@ -56,8 +64,6 @@ void Simulator::send(const Message& m)
         // Increment Counter -> POV: Network
         counterManager.incrementExtraCopies();
     }
-    // Increment Counter -> POV: Network
-    if (networkDecision.empty()) counterManager.incrementDropMessage();
 }
 
 std::uint64_t Simulator::now() const
@@ -80,15 +86,22 @@ void Simulator::run(std::uint64_t timeLimit)
         auto node = nodes.find(event.target);
         if (node == nodes.end())
         {
+            // TRACE for Undelivered
+            if (event.kind == EventKind::Delivery)
+            {
+                tracer.recordUndeliverable(clock, event.messageId, event.message);
+            }
             continue;
         }
         if (event.kind == EventKind::Delivery)
         {
-            node->second->onMessage(event.message);
             // Increment Counter -> POV: Network
             counterManager.incrementDeliveredMessage();
+            tracer.recordDelivered(clock, event.messageId, event.message);
+            node->second->onMessage(event.message);
         } else
         {
+            tracer.recordTimerFired(clock, event.target, event.timerId);
             node->second->onTimer(event.timerId);
         }
     }
@@ -104,4 +117,18 @@ Counters Simulator::getCounters() const
     return counterManager.getCounters();
 }
 
+void Simulator::printTrace(std::ostream& out) const
+{
+    tracer.print(out);
+}
+
+const std::vector<Record>& Simulator::getTrace() const
+{
+    return tracer.getRecords();
+}
+
+void Simulator::setTraceEnabled(bool on)
+{
+    tracer.setEnabled(on);
+}
 

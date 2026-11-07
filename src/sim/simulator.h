@@ -14,6 +14,7 @@
 #include "counter.h"
 #include "node.h"
 #include "deliveryPolicy.h"
+#include "trace.h"
 #include "transport.h"
 
 enum class EventKind
@@ -29,6 +30,7 @@ struct Event
     std::uint32_t target = 0; // which node receives it
     EventKind kind = EventKind::Delivery;
     Message message; // used when the kind is Delivery
+    std::uint64_t messageId = 0; // used when the kind is Delivery: the same for all copies of one send()
     std::uint64_t timerId = 0; // used when the kind is Timer
 };
 
@@ -54,10 +56,12 @@ private:
     //Nodes
     std::map<std::uint32_t, Node*> nodes;
 
-    std::uint64_t nextOrder = 0;
+    std::uint64_t nextOrder = 0; // one per scheduled event
+    std::uint64_t nextMessageId = 0; // one per send()
 
     DeliveryPolicy* networkPolicy = nullptr;
     CounterManager counterManager;
+    Trace tracer;
 
 
 public:
@@ -73,6 +77,10 @@ public:
     void setNetworkPolicy(DeliveryPolicy& policy);
 
     [[nodiscard]] Counters getCounters() const;
+
+    [[nodiscard]] const std::vector<Record>& getTrace() const;
+    void setTraceEnabled(bool on);
+    void printTrace(std::ostream& out) const;
 };
 
 #endif //ATTACK_LAB_BFT_SIMULATOR_H
