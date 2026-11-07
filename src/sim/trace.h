@@ -35,6 +35,7 @@ struct Record
 };
 
 std::string toString(const Record& record);
+std::ostream& operator<<(std::ostream& out, const Record& record);
 
 
 class Trace
