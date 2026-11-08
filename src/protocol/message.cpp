@@ -33,6 +33,15 @@ namespace
         }
     }
 
+    void appendRequest(std::vector<unsigned char>& out, const Request& request)
+    {
+        appendU32(out, request.clientId);
+        appendU64(out, request.requestId);
+        appendU8(out, static_cast<std::uint8_t>(request.op));
+        appendBytes(out, request.key);
+        appendBytes(out, request.value);
+    }
+
     struct Reader
     {
         const std::vector<unsigned char>& bytes;
@@ -107,11 +116,7 @@ std::vector<unsigned char> bytesToSign(const Message& message)
     appendU64(message_serialized, message.seq);
     message_serialized.insert(message_serialized.end(), message.digest.begin(), message.digest.end());
     // Request
-    appendU32(message_serialized, message.payload.clientId);
-    appendU64(message_serialized, message.payload.requestId);
-    appendU8(message_serialized, static_cast<std::uint8_t>(message.payload.op));
-    appendBytes(message_serialized, message.payload.key);
-    appendBytes(message_serialized, message.payload.value);
+    appendRequest(message_serialized, message.payload);
     // Result
     appendU8(message_serialized, static_cast<std::uint8_t>(message.result.status));
     appendBytes(message_serialized, message.result.value);
@@ -160,4 +165,16 @@ std::optional<Message> parse(const std::vector<unsigned char>& bytes)
     if (r.remaining() != 0) return std::nullopt;
     return m;
 
+}
+
+Digest requestDigest(const Request& request)
+{
+    // Request -> bytes
+    std::vector<unsigned char> bytes;
+    appendRequest(bytes, request);
+
+    // Hash bytes
+    Digest digest{};
+    crypto_hash_sha256(digest.data(), bytes.data(), bytes.size());
+    return digest;
 }

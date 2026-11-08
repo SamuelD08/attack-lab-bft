@@ -39,6 +39,7 @@ struct Message
 std::vector<unsigned char> bytesToSign(const Message& message);
 std::vector<unsigned char> serialize(const Message& message);
 std::optional<Message> parse(const std::vector<unsigned char>& bytes);
+Digest requestDigest(const Request& request);
 
 
 
