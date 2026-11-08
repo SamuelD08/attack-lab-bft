@@ -307,6 +307,43 @@ TEST(PrePreparePhase, DuplicatedPrePrepareGivesPreparesOnlyOnce)
 }
 
 
+// The next three tests check the window rule: a slot is accepted if it is after
+// the last executed slot and not too far ahead.
+
+TEST(PrePreparePhase, SlotZeroIsIgnored)
+{
+    OneBackup setup;
+
+    setup.sim.send(prePrepare(0, sampleRequest(1, "1"))); // slots start at 1
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::PREPARE), 0u);
+}
+
+TEST(PrePreparePhase, NextSlotArrivingFirstIsAccepted)
+{
+    // With random delays, the PRE-PREPARE for slot 2 can arrive before slot 1's.
+    OneBackup setup;
+
+    setup.sim.send(prePrepare(2, sampleRequest(2, "2")));
+    setup.sim.run(kForever);
+
+    const std::vector<Message> prepares = received(setup.r2, MessageType::PREPARE);
+    ASSERT_EQ(prepares.size(), 1);
+    EXPECT_EQ(prepares[0].seq, 2);
+}
+
+TEST(PrePreparePhase, SlotFarAheadIsIgnored)
+{
+    OneBackup setup;
+
+    setup.sim.send(prePrepare(1000000, sampleRequest(1, "1")));
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::PREPARE), 0);
+}
+
+
 
 // ---------- a backup receives PREPAREs ----------
 

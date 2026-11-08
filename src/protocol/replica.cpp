@@ -99,11 +99,11 @@ void Replica::sendCommitIfPrepared(const std::uint64_t seq)
     }
 }
 
-void Replica::onMessageRequest(const Message& message)
+void Replica::onMessageRequest(const Message& m)
 {
-    const Request& request = message.payload;
+    const Request& request = m.payload;
     // Check if the clientId is consistent with senderId
-    if (request.clientId != message.sender) return;
+    if (request.clientId != m.sender) return;
 
     // When a Request is receipt
     // Check that the replica is the primary
@@ -128,6 +128,8 @@ void Replica::onMessageRequest(const Message& message)
 
 void Replica::onMessagePrePrepare(const Message& m)
 {
+    if (!isInsideWindow(m.seq)) return;
+
     // Check if it is from the primary
     if (getPrimary() != m.sender) return;
 
@@ -170,6 +172,8 @@ void Replica::onMessagePrePrepare(const Message& m)
 
 void Replica::onMessagePrepare(const Message& m)
 {
+    if (!isInsideWindow(m.seq)) return;
+
     // Check that the sender is a replica and not a client
     if (m.sender >= n) return;
 
@@ -202,4 +206,9 @@ bool Replica::isNewer(const std::map<std::uint32_t, std::uint64_t>& last, const 
     const auto it = last.find(request.clientId); // find, not []: reading must not create entries
     const std::uint64_t lastId = (it == last.end()) ? 0 : it->second;
     return request.requestId > lastId;
+}
+
+bool Replica::isInsideWindow(const std::uint64_t seq) const
+{
+    return (seq > lastExecuted) && (seq <= lastExecuted + windowSize);
 }

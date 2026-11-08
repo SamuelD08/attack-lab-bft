@@ -33,7 +33,8 @@ private:
     std::uint64_t f = 0; // max number of failed replica
     const std::uint64_t n;
     Signer& signer;
-    std::uint64_t expectedSeq = 1; // Not for primary, to check if the seq of the preprepare request is consistent
+    std::uint64_t lastExecuted = 0; // Not for primary, to follow the seq number of the last executed request
+    const std::uint64_t windowSize = 10; // Not for primary, The maximum window size tht a replica accept preprepare (without execute it)
     std::uint64_t currentView = 0; // To compute the primary (the primary is currentView % n)
     std::uint64_t nextSeq = 1; // Primary only, to number the request; the first request has seq 1
     std::queue<Request> waitingRequests; // Primary only, the queue of waiting request -> one request at a time
@@ -53,6 +54,9 @@ private:
 
     // To check if the requestId from a client is an older one or not
     static bool isNewer(const std::map<std::uint32_t, std::uint64_t>& last, const Request& request);
+
+    // To check if the seq is inside the window
+    [[nodiscard]] bool isInsideWindow(std::uint64_t seq) const;
 
 
 public:
