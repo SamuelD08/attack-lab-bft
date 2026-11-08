@@ -21,6 +21,9 @@ void Replica::onMessage(const Message& m)
     case MessageType::PRE_PREPARE:
         onMessagePrePrepare(m);
         break;
+    case MessageType::PREPARE:
+        onMessagePrepare(m);
+        break;
     default:
         break;
     }
@@ -64,6 +67,38 @@ void Replica::startRound(const Request& request)
     }
 }
 
+void Replica::sendCommitIfPrepared(const std::uint64_t seq)
+{
+    auto it = requestInformation.find(seq);
+    if (it == requestInformation.end()) return;
+    RequestInformation& slot = it->second;
+    if (!slot.preprepareAccepted || slot.commitSent) return;
+    const auto voters = slot.whoVotePrepare.find(slot.digest);
+    if (voters == slot.whoVotePrepare.end()) return;
+    if (const std::size_t numVotes = voters->second.size(); numVotes < 2*f) return;
+
+    // Create commit message
+    slot.commitSent = true;
+    Message commit;
+    commit.digest = slot.digest;
+    commit.sender = id;
+    commit.seq = seq;
+    commit.view = currentView;
+    commit.type = MessageType::COMMIT;
+
+    // Record my own commit
+    slot.whoVoteCommit[slot.digest].insert(id);
+
+    //Send it
+    for (std::uint32_t replica = 0; replica < n; replica++)
+    {
+        if (replica == id) continue;
+        commit.receiver = replica;
+        signer.sign(commit);
+        transport.send(commit);
+    }
+}
+
 void Replica::onMessageRequest(const Message& message)
 {
     const Request& request = message.payload;
@@ -103,22 +138,24 @@ void Replica::onMessagePrePrepare(const Message& m)
     if (m.digest != requestDigest(m.payload)) return;
 
     // Check that no other request was already accepted for this seq
-    if (requestInformation.find(m.seq)->second.preprepareAccepted) return;
+    auto it = requestInformation.find(m.seq);
+    if (it != requestInformation.end() && it->second.preprepareAccepted) return;
 
     // Record the slot
     RequestInformation& slot = requestInformation[m.seq];
     slot.request = m.payload;
     slot.digest = m.digest;
     slot.preprepareAccepted = true;
+    // Record my own vote
+    slot.whoVotePrepare[m.digest].insert(id);
 
     // Create a PREPARE message
     Message prepare;
     prepare.type = MessageType::PREPARE;
-    prepare.payload = m.payload;
     prepare.sender = id;
     prepare.digest = slot.digest;
     prepare.view = currentView;
-    prepare.seq = nextSeq++;
+    prepare.seq = m.seq;
 
     // Send this message
     for (std::uint32_t replica = 0; replica < n; replica++)
@@ -128,6 +165,25 @@ void Replica::onMessagePrePrepare(const Message& m)
         signer.sign(prepare);
         transport.send(prepare);
     }
+    sendCommitIfPrepared(prepare.seq);
+}
+
+void Replica::onMessagePrepare(const Message& m)
+{
+    // Check that the sender is a replica and not a client
+    if (m.sender >= n) return;
+
+    // Check if it is not from the primary (the primary never send PREPARE)
+    if (m.sender == getPrimary()) return;
+
+    // Check the view
+    if (currentView != m.view) return;
+
+    // Record the sender in the votes
+    RequestInformation& slot = requestInformation[m.seq];
+    slot.whoVotePrepare[m.digest].insert(m.sender);
+
+    sendCommitIfPrepared(m.seq);
 }
 
 
