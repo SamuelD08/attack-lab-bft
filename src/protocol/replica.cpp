@@ -18,6 +18,9 @@ void Replica::onMessage(const Message& m)
     case MessageType::REQUEST:
         onMessageRequest(m);
         break;
+    case MessageType::PRE_PREPARE:
+        onMessagePrePrepare(m);
+        break;
     default:
         break;
     }
@@ -86,6 +89,45 @@ void Replica::onMessageRequest(const Message& message)
         return;
     }
     startRound(request);
+}
+
+void Replica::onMessagePrePrepare(const Message& m)
+{
+    // Check if it is from the primary
+    if (getPrimary() != m.sender) return;
+
+    // Check the view
+    if (currentView != m.view) return;
+
+    // Check the digest
+    if (m.digest != requestDigest(m.payload)) return;
+
+    // Check that no other request was already accepted for this seq
+    if (requestInformation.find(m.seq)->second.preprepareAccepted) return;
+
+    // Record the slot
+    RequestInformation& slot = requestInformation[m.seq];
+    slot.request = m.payload;
+    slot.digest = m.digest;
+    slot.preprepareAccepted = true;
+
+    // Create a PREPARE message
+    Message prepare;
+    prepare.type = MessageType::PREPARE;
+    prepare.payload = m.payload;
+    prepare.sender = id;
+    prepare.digest = slot.digest;
+    prepare.view = currentView;
+    prepare.seq = nextSeq++;
+
+    // Send this message
+    for (std::uint32_t replica = 0; replica < n; replica++)
+    {
+        if (replica == id) continue;
+        prepare.receiver = replica;
+        signer.sign(prepare);
+        transport.send(prepare);
+    }
 }
 
 

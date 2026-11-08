@@ -47,6 +47,7 @@ private:
 
     void startRound(const Request& request);
     void onMessageRequest(const Message& message);
+    void onMessagePrePrepare(const Message& m);
 
     // To check if the requestId from a client is an older one or not
     static bool isNewer(const std::map<std::uint32_t, std::uint64_t>& last, const Request& request);
