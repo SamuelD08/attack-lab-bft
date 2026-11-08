@@ -12,15 +12,16 @@ void FakeSigner::sign(Message& m)
 {
     signCounter++;
     m.signature.fill(0);
-    std::memcpy(m.signature.data(), &ownerId, sizeof(ownerId));
+    const std::uint32_t stored = ownerId + 1;
+    std::memcpy(m.signature.data(), &stored, sizeof(stored));
 }
 
 bool FakeSigner::verify(const Message& m)
 {
-    std::uint32_t id = 0;
+    std::uint32_t stored = 0;
     verifyCounter++;
-    std::memcpy(&id, m.signature.data(), sizeof(id));
-    return (id == m.sender);
+    std::memcpy(&stored, m.signature.data(), sizeof(stored));
+    return (stored == m.sender + 1);
 }
 
 std::uint64_t FakeSigner::getSignCounter() const
