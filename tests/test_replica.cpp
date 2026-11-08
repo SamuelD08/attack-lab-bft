@@ -52,6 +52,22 @@ namespace
         return m;
     }
 
+    // A PREPARE vote from `from` for slot `seq` and digest `digest`, sent to `to`.
+    Message prepareVote(std::uint32_t from, std::uint64_t seq, const Digest& digest, std::uint32_t to = 1)
+    {
+        Message m;
+        m.type = MessageType::PREPARE;
+        m.sender = from;
+        m.receiver = to;
+        m.view = 0;
+        m.seq = seq;
+        m.digest = digest;
+        FakeSigner signer(from);
+        signer.sign(m);
+        return m;
+    }
+
+
     std::vector<Message> received(const TestNode& node, MessageType type)
     {
         std::vector<Message> result;
@@ -88,6 +104,39 @@ namespace
         [[nodiscard]] std::size_t sentByBackup(const MessageType type) const
         {
             return received(r0, type).size() + received(r2, type).size() + received(r3, type).size();
+        }
+    };
+
+    // Replica 0 is real (the primary). Replicas 1, 2 and 3 are TestNodes.
+    struct OnePrimary
+    {
+        Simulator sim{1, 100, 0};
+        FakeSigner signer0{0};
+        Replica primary{0, sim, 1, signer0};
+        Log log;
+        TestNode r1{1, sim, log};
+        TestNode r2{2, sim, log};
+        TestNode r3{3, sim, log};
+
+        OnePrimary()
+        {
+            sim.addNode(0, primary);
+            sim.addNode(1, r1);
+            sim.addNode(2, r2);
+            sim.addNode(3, r3);
+        }
+
+        // The client's REQUEST, so that the primary starts slot 1.
+        void sendRequest(const Request& request)
+        {
+            Message m;
+            m.type = MessageType::REQUEST;
+            m.sender = request.clientId;
+            m.receiver = 0;
+            m.payload = request;
+            FakeSigner client(request.clientId);
+            client.sign(m);
+            sim.send(m);
         }
     };
 }
@@ -256,3 +305,149 @@ TEST(PrePreparePhase, DuplicatedPrePrepareGivesPreparesOnlyOnce)
 
     EXPECT_EQ(setup.sentByBackup(MessageType::PREPARE), 3);
 }
+
+
+
+// ---------- a backup receives PREPAREs ----------
+
+TEST(PreparePhase, NotPreparedWithOnlyItsOwnVote)
+{
+    OneBackup setup;
+
+    setup.sim.send(prePrepare(1, sampleRequest(1, "1")));
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::COMMIT), 0);
+}
+
+TEST(PreparePhase, OneMoreBackupVoteMakesItPrepared)
+{
+    OneBackup setup;
+    const Request request = sampleRequest(1, "1");
+
+    setup.sim.send(prePrepare(1, request));
+    setup.sim.send(prepareVote(2, 1, requestDigest(request))); // own vote + replica 2 = 2f
+    setup.sim.run(kForever);
+
+    FakeSigner checker(9);
+    for (const TestNode* node : {&setup.r0, &setup.r2, &setup.r3})
+    {
+        const std::vector<Message> commits = received(*node, MessageType::COMMIT);
+        ASSERT_EQ(commits.size(), 1);
+        EXPECT_EQ(commits[0].sender, 1);
+        EXPECT_EQ(commits[0].seq, 1);
+        EXPECT_EQ(commits[0].digest, requestDigest(request));
+        EXPECT_TRUE(checker.verify(commits[0]));
+    }
+}
+
+TEST(PreparePhase, VoteForAnotherDigestDoesNotCount)
+{
+    OneBackup setup;
+
+    setup.sim.send(prePrepare(1, sampleRequest(1, "1")));
+    setup.sim.send(prepareVote(2, 1, requestDigest(sampleRequest(1, "2"))));
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::COMMIT), 0);
+}
+
+TEST(PreparePhase, PrepareFromThePrimaryDoesNotCount)
+{
+    OneBackup setup;
+    const Request request = sampleRequest(1, "1");
+
+    setup.sim.send(prePrepare(1, request));
+    setup.sim.send(prepareVote(0, 1, requestDigest(request))); // the primary sends no PREPARE
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::COMMIT), 0);
+}
+
+TEST(PreparePhase, PrepareFromAClientDoesNotCount)
+{
+    OneBackup setup;
+    const Request request = sampleRequest(1, "1");
+
+    setup.sim.send(prePrepare(1, request));
+    setup.sim.send(prepareVote(100, 1, requestDigest(request))); // 100 is a client, not a replica
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::COMMIT), 0);
+}
+
+TEST(PreparePhase, UnsignedPrepareDoesNotCount)
+{
+    OneBackup setup;
+    const Request request = sampleRequest(1, "1");
+    Message vote = prepareVote(2, 1, requestDigest(request));
+    vote.signature.fill(0);
+
+    setup.sim.send(prePrepare(1, request));
+    setup.sim.send(vote);
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::COMMIT), 0);
+}
+
+TEST(PreparePhase, VoteArrivingBeforeThePrePrepareIsKept)
+{
+    OneBackup setup;
+    const Request request = sampleRequest(1, "1");
+
+    setup.sim.send(prepareVote(2, 1, requestDigest(request))); // arrives first
+    setup.sim.send(prePrepare(1, request));                    // arrives second
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::COMMIT), 3);
+}
+
+TEST(PreparePhase, CommitIsSentOnlyOnce)
+{
+    OneBackup setup;
+    const Request request = sampleRequest(1, "1");
+
+    setup.sim.send(prePrepare(1, request));
+    setup.sim.send(prepareVote(2, 1, requestDigest(request))); // prepared here
+    setup.sim.send(prepareVote(3, 1, requestDigest(request))); // and still prepared here
+    setup.sim.run(kForever);
+
+    EXPECT_EQ(setup.sentByBackup(MessageType::COMMIT), 3); // one per other replica, not six
+}
+
+// ---------- the primary receives PREPAREs ----------
+
+TEST(PreparePhase, PrimaryIsPreparedWithTwoBackupVotes)
+{
+    OnePrimary setup;
+    const Request request = sampleRequest(1, "1");
+
+    setup.sendRequest(request);
+    setup.sim.send(prepareVote(1, 1, requestDigest(request), 0));
+    setup.sim.send(prepareVote(2, 1, requestDigest(request), 0));
+    setup.sim.run(kForever);
+
+    for (const TestNode* node : {&setup.r1, &setup.r2, &setup.r3})
+    {
+        const std::vector<Message> commits = received(*node, MessageType::COMMIT);
+        ASSERT_EQ(commits.size(), 1);
+        EXPECT_EQ(commits[0].sender, 0);
+        EXPECT_EQ(commits[0].seq, 1);
+    }
+}
+
+TEST(PreparePhase, SameVoteTwiceCountsOnce)
+{
+    OnePrimary setup;
+    const Request request = sampleRequest(1, "1");
+    const Message vote = prepareVote(1, 1, requestDigest(request), 0);
+
+    setup.sendRequest(request);
+    setup.sim.send(vote);
+    setup.sim.send(vote); // duplicated by the network: still only one voter
+    setup.sim.run(kForever);
+
+    EXPECT_TRUE(received(setup.r1, MessageType::COMMIT).empty());
+}
+
+
