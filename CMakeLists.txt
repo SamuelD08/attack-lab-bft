@@ -50,6 +50,7 @@ add_executable(unit_tests
         tests/test_counter.cpp
         tests/test_trace.cpp
         tests/test_replica.cpp
+        tests/test_commit_phase.cpp
 )
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main PkgConfig::SODIUM attacklab)
 include(GoogleTest)
