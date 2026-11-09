@@ -22,7 +22,6 @@ struct RequestInformation
     std::map<Digest, std::set<std::uint32_t>> whoVoteCommit; // contain replica Id
     bool preprepareAccepted = false;
     bool commitSent = false;
-    bool isExecuted = false;
 };
 
 class Replica: public Node
@@ -42,22 +41,27 @@ private:
     KVStore kv; // state machine
     std::map<std::uint64_t, Request> ledger; // every operation in the order
     std::map<std::uint32_t, std::uint64_t>  lastRequestId; // To avoid the same request twice (duplicate), one per client, first -> clientID, second -> lastRequestSeq
+    std::map<std::uint32_t, std::uint64_t>  lastRequestExecuted; // To store the request executed, one per client, first -> clientID, second -> lastRequestSeq
     bool roundRunning = false;
 
     [[nodiscard]] std::uint32_t getPrimary() const;
 
     void startRound(const Request& request);
     void sendCommitIfPrepared(std::uint64_t seq);
-    void onMessageRequest(const Message& message);
+    [[nodiscard]] bool isCommitted(std::uint64_t seq) const;
+
+    void onMessageRequest(const Message& m);
     void onMessagePrePrepare(const Message& m);
     void onMessagePrepare(const Message& m);
+    void onMessageCommit(const Message& m);
+
+    void executeReady();
 
     // To check if the requestId from a client is an older one or not
     static bool isNewer(const std::map<std::uint32_t, std::uint64_t>& last, const Request& request);
 
     // To check if the seq is inside the window
     [[nodiscard]] bool isInsideWindow(std::uint64_t seq) const;
-
 
 public:
     Replica(std::uint32_t replicaId, Transport& network, std::uint64_t maxFaulty, Signer& cryptoSigner);
@@ -66,6 +70,9 @@ public:
     void onTimer(std::uint64_t timerId) override;
 
     [[nodiscard]] const std::map<std::uint64_t, Request>& getLedger() const;
+
+    [[nodiscard]] const KVStore& getKVStore() const;
+    [[nodiscard]] std::uint64_t getLastExecuted() const;
 };
 
 #endif //ATTACK_LAB_BFT_REPLICA_H

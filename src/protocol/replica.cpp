@@ -24,6 +24,9 @@ void Replica::onMessage(const Message& m)
     case MessageType::PREPARE:
         onMessagePrepare(m);
         break;
+    case MessageType::COMMIT:
+        onMessageCommit(m);
+        break;
     default:
         break;
     }
@@ -96,6 +99,55 @@ void Replica::sendCommitIfPrepared(const std::uint64_t seq)
         commit.receiver = replica;
         signer.sign(commit);
         transport.send(commit);
+    }
+    // The replica can be the last one to commit
+    executeReady();
+}
+
+void Replica::executeReady()
+{
+    while (true)
+    {
+        const std::uint64_t seq = lastExecuted + 1;
+
+        auto slot = requestInformation.find(lastExecuted + 1);
+        if (slot == requestInformation.end()) break;
+
+        if (!isCommitted(seq)) break;
+
+        Request r = slot->second.request;
+        // Execute request
+        //Check if it is already executed
+        if (isNewer(lastRequestExecuted, r)){
+            lastRequestExecuted[r.clientId] = r.requestId;
+            const Result res = kv.execute(r);
+            ledger[seq] = r;
+            // Reply to the client
+            Message m;
+            m.receiver = r.clientId;
+            m.seq = seq;
+            m.result = res;
+            m.type = MessageType::REPLY;
+            m.sender = id;
+            m.payload = r;
+            m.view = currentView;
+            signer.sign(m);
+            transport.send(m);
+        }
+        lastExecuted = seq;
+
+        // Primary only
+        if (getPrimary() == id)
+        {
+            roundRunning = false;
+            if (!waitingRequests.empty())
+            {
+                Request newRequest = waitingRequests.front();
+                waitingRequests.pop();
+                startRound(newRequest);
+
+            }
+        }
     }
 }
 
@@ -190,6 +242,23 @@ void Replica::onMessagePrepare(const Message& m)
     sendCommitIfPrepared(m.seq);
 }
 
+void Replica::onMessageCommit(const Message& m)
+{
+    if (!isInsideWindow(m.seq)) return;
+
+    // Check that the sender is a replica and not a client
+    if (m.sender >= n) return;
+
+    // Check the view
+    if (currentView != m.view) return;
+
+    // Record the sender in the votes
+    RequestInformation& slot = requestInformation[m.seq];
+    slot.whoVoteCommit[m.digest].insert(m.sender);
+
+    executeReady();
+}
+
 
 std::uint32_t Replica::getPrimary() const
 {
@@ -211,4 +280,25 @@ bool Replica::isNewer(const std::map<std::uint32_t, std::uint64_t>& last, const 
 bool Replica::isInsideWindow(const std::uint64_t seq) const
 {
     return (seq > lastExecuted) && (seq <= lastExecuted + windowSize);
+}
+
+bool Replica::isCommitted(const std::uint64_t seq) const
+{
+    const auto it = requestInformation.find(seq);
+    if (it == requestInformation.end()) return false;
+    const auto& slot = it->second;
+    if (!slot.preprepareAccepted) return false;
+    const auto voters = slot.whoVoteCommit.find(slot.digest);
+    if (voters == slot.whoVoteCommit.end()) return false;
+    return voters->second.size() >= 2*f+1;
+}
+
+const KVStore& Replica::getKVStore() const
+{
+    return kv;
+}
+
+std::uint64_t Replica::getLastExecuted() const
+{
+    return lastExecuted;
 }
